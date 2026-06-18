@@ -111,8 +111,12 @@ export default function BlockList({ initialBlocks, ships }: Props) {
   async function handleDelete(id: string) {
     if (!confirm("블록을 삭제하면 연결된 검사 데이터도 모두 삭제됩니다. 계속하시겠습니까?")) return;
     setDeleteId(id);
-    await supabase.from("blocks").delete().eq("id", id);
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    const { error } = await supabase.from("blocks").delete().eq("id", id);
+    if (error) {
+      alert("삭제 실패: " + error.message);
+    } else {
+      setBlocks((prev) => prev.filter((b) => b.id !== id));
+    }
     setDeleteId(null);
   }
 

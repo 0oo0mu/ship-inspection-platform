@@ -54,7 +54,9 @@ export default function Sidebar() {
           // 현재 경로와 메뉴 경로 비교
           const isActive =
             href === "/inspections/new"
-              ? pathname === href
+              ? pathname === "/inspections/new"
+              : href === "/inspections"
+              ? pathname === "/inspections" || (pathname.startsWith("/inspections/") && pathname !== "/inspections/new")
               : pathname.startsWith(href);
 
           return (

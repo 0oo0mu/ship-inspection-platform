@@ -95,8 +95,12 @@ export default function ShipList({ initialShips }: Props) {
   async function handleDelete(id: string) {
     if (!confirm("선박을 삭제하면 연결된 블록과 검사 데이터도 모두 삭제됩니다. 계속하시겠습니까?")) return;
     setDeleteId(id);
-    await supabase.from("ships").delete().eq("id", id);
-    setShips((prev) => prev.filter((s) => s.id !== id));
+    const { error } = await supabase.from("ships").delete().eq("id", id);
+    if (error) {
+      alert("삭제 실패: " + error.message);
+    } else {
+      setShips((prev) => prev.filter((s) => s.id !== id));
+    }
     setDeleteId(null);
   }
 
