@@ -13,7 +13,7 @@ export function createServerSupabaseClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           // 서버 컴포넌트에서는 쿠키 쓰기가 불가하므로 try/catch로 무시
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
