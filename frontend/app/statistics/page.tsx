@@ -13,7 +13,7 @@ export default async function StatisticsPage() {
   ] = await Promise.all([
     supabase
       .from("inspections")
-      .select("id, result, defect_type, confidence, status, created_at, ship_id, ship:ships(name)")
+      .select("id, result, defect_type, confidence, status, inspection_category, severity, created_at, ship_id, ship:ships(name)")
       .order("created_at", { ascending: true }),
     supabase
       .from("ships")

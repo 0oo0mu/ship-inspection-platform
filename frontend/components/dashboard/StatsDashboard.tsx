@@ -11,16 +11,12 @@ import {
 import {
   CheckCircle, AlertTriangle, Activity, TrendingUp, BarChart2
 } from "lucide-react";
+import { defectTypeKr, CATEGORY_LIST, categoryShortLabel } from "@/lib/inspectionMeta";
 
 // ────────────────────────────────────────────────────────────
 // 색상 팔레트
 // ────────────────────────────────────────────────────────────
 const COLORS = ["#ef4444", "#3b82f6", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899"];
-
-const defectTypeKr: Record<string, string> = {
-  crack: "균열", porosity: "기공", undercut: "언더컷",
-  overlap: "오버랩", spatter: "스패터",
-};
 
 // ────────────────────────────────────────────────────────────
 // Props

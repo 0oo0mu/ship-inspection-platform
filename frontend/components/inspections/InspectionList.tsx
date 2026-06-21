@@ -4,7 +4,8 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Ship, InspectionStatus } from "@/lib/types";
+import { Ship, InspectionStatus, Severity } from "@/lib/types";
+import { CATEGORY_LIST, categoryShortLabel, severityColor, getDefectLabel, InspectionCategory } from "@/lib/inspectionMeta";
 import {
   CheckCircle, AlertTriangle, Clock, Search,
   Filter, ChevronRight, RefreshCw, Wrench
@@ -23,31 +24,28 @@ const statusBadge: Record<InspectionStatus, { label: string; color: string }> = 
   completed:        { label: "완료",        color: "bg-green-100 text-green-700" },
 };
 
-const defectTypeKr: Record<string, string> = {
-  crack: "균열", porosity: "기공", undercut: "언더컷",
-  overlap: "오버랩", spatter: "스패터",
-};
-
 interface Props {
   initialInspections: any[];
   ships: Ship[];
 }
 
 export default function InspectionList({ initialInspections, ships }: Props) {
-  const [search,       setSearch]       = useState("");
-  const [filterShip,   setFilterShip]   = useState("all");
-  const [filterResult, setFilterResult] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterDate,   setFilterDate]   = useState("");
-  const [page,         setPage]         = useState(1);
+  const [search,         setSearch]         = useState("");
+  const [filterShip,     setFilterShip]     = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterResult,   setFilterResult]   = useState("all");
+  const [filterStatus,   setFilterStatus]   = useState("all");
+  const [filterDate,     setFilterDate]     = useState("");
+  const [page,           setPage]           = useState(1);
   const PAGE_SIZE = 10;
 
   // 필터 적용
   const filtered = useMemo(() => {
     return initialInspections.filter((ins) => {
-      if (filterShip   !== "all" && ins.ship_id !== filterShip)     return false;
-      if (filterResult !== "all" && ins.result  !== filterResult)   return false;
-      if (filterStatus !== "all" && ins.status  !== filterStatus)   return false;
+      if (filterShip     !== "all" && ins.ship_id !== filterShip)               return false;
+      if (filterCategory !== "all" && ins.inspection_category !== filterCategory) return false;
+      if (filterResult   !== "all" && ins.result  !== filterResult)             return false;
+      if (filterStatus   !== "all" && ins.status  !== filterStatus)             return false;
       if (filterDate) {
         const insDate = new Date(ins.created_at).toISOString().slice(0, 10);
         if (insDate !== filterDate) return false;
@@ -60,14 +58,14 @@ export default function InspectionList({ initialInspections, ships }: Props) {
       }
       return true;
     });
-  }, [initialInspections, filterShip, filterResult, filterStatus, filterDate, search]);
+  }, [initialInspections, filterShip, filterCategory, filterResult, filterStatus, filterDate, search]);
 
   // 페이지네이션
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function resetFilters() {
-    setSearch(""); setFilterShip("all"); setFilterResult("all");
+    setSearch(""); setFilterShip("all"); setFilterCategory("all"); setFilterResult("all");
     setFilterStatus("all"); setFilterDate(""); setPage(1);
   }
 
@@ -100,6 +98,18 @@ export default function InspectionList({ initialInspections, ships }: Props) {
           >
             <option value="all">전체 선박</option>
             {ships.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+
+          {/* 검사 종류 필터 */}
+          <select
+            value={filterCategory}
+            onChange={(e) => { setFilterCategory(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="all">전체 검사종류</option>
+            {CATEGORY_LIST.map((c) => (
+              <option key={c} value={c}>{categoryShortLabel[c]}</option>
+            ))}
           </select>
 
           {/* 결과 필터 */}
@@ -158,14 +168,16 @@ export default function InspectionList({ initialInspections, ships }: Props) {
           <p>검사 이력이 없습니다.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">날짜</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">선박 / 블록</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">검사종류</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">결과</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">불량 유형</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">심각도</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">신뢰도</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500">상태</th>
                 <th className="px-4 py-3"></th>
@@ -176,6 +188,7 @@ export default function InspectionList({ initialInspections, ships }: Props) {
                 const rb = resultBadge[ins.result as "normal" | "defect"] ?? resultBadge.normal;
                 const Icon = rb.icon;
                 const sb = statusBadge[ins.status as InspectionStatus] ?? statusBadge.pending;
+                const sev = ins.severity as Severity | null;
                 return (
                   <tr key={ins.id} className="hover:bg-slate-50 transition-colors">
                     {/* 날짜 */}
@@ -195,6 +208,11 @@ export default function InspectionList({ initialInspections, ships }: Props) {
                       </p>
                     </td>
 
+                    {/* 검사종류 */}
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {categoryShortLabel[ins.inspection_category as InspectionCategory] ?? "용접"}
+                    </td>
+
                     {/* 결과 배지 */}
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${rb.color}`}>
@@ -206,8 +224,17 @@ export default function InspectionList({ initialInspections, ships }: Props) {
                     {/* 불량 유형 */}
                     <td className="px-4 py-3 text-slate-600">
                       {ins.defect_type
-                        ? defectTypeKr[ins.defect_type] ?? ins.defect_type
+                        ? getDefectLabel(ins.defect_type)
                         : <span className="text-slate-300">—</span>}
+                    </td>
+
+                    {/* 심각도 */}
+                    <td className="px-4 py-3">
+                      {sev ? (
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full border whitespace-nowrap ${severityColor[sev]}`}>
+                          {sev}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
                     </td>
 
                     {/* 신뢰도 */}

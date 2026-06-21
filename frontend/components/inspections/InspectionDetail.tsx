@@ -5,16 +5,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import { Inspection, DefectLog, InspectionStatus } from "@/lib/types";
+import { Inspection, DefectLog, InspectionStatus, Severity } from "@/lib/types";
+import { categoryShortLabel, severityColor, getDefectLabel, InspectionCategory } from "@/lib/inspectionMeta";
 import {
   CheckCircle, AlertTriangle, Anchor, Layers,
   Calendar, User, ChevronDown, Loader2
 } from "lucide-react";
-
-const defectTypeKr: Record<string, string> = {
-  crack: "균열", porosity: "기공", undercut: "언더컷",
-  overlap: "오버랩", spatter: "스패터",
-};
 
 const statusConfig: Record<InspectionStatus, { label: string; color: string }> = {
   pending:          { label: "대기",        color: "bg-slate-100 text-slate-600" },
@@ -54,15 +50,28 @@ export default function InspectionDetail({ inspection, defectLogs }: Props) {
           : <CheckCircle   className="w-10 h-10 text-green-500 flex-shrink-0" />
         }
         <div className="flex-1">
-          <p className={`text-xl font-bold ${isDefect ? "text-red-700" : "text-green-700"}`}>
-            {isDefect ? "불량 감지" : "정상 판정"}
-          </p>
-          <div className="flex flex-wrap gap-4 mt-1 text-sm text-slate-600">
-            <span>신뢰도: <strong>{(inspection.confidence * 100).toFixed(1)}%</strong></span>
-            {isDefect && inspection.defect_type && (
-              <span>불량 유형: <strong>{defectTypeKr[inspection.defect_type] ?? inspection.defect_type}</strong></span>
+          <div className="flex items-center gap-2">
+            <p className={`text-xl font-bold ${isDefect ? "text-red-700" : "text-green-700"}`}>
+              {isDefect ? "불량 감지" : "정상 판정"}
+            </p>
+            {inspection.severity && (
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${severityColor[inspection.severity as Severity]}`}>
+                {inspection.severity}
+              </span>
             )}
           </div>
+          <div className="flex flex-wrap gap-4 mt-1 text-sm text-slate-600">
+            <span>검사 종류: <strong>{categoryShortLabel[inspection.inspection_category as InspectionCategory] ?? "용접"}</strong></span>
+            <span>신뢰도: <strong>{(inspection.confidence * 100).toFixed(1)}%</strong></span>
+            {isDefect && inspection.defect_type && (
+              <span>불량 유형: <strong>{getDefectLabel(inspection.defect_type)}</strong></span>
+            )}
+          </div>
+          {inspection.recommended_action && (
+            <p className="mt-2 text-sm text-slate-700 bg-white/70 border border-slate-200 rounded-lg px-3 py-2 inline-block">
+              <span className="font-semibold">권장 조치: </span>{inspection.recommended_action}
+            </p>
+          )}
         </div>
 
         {/* 재작업 상태 변경 */}
@@ -96,7 +105,7 @@ export default function InspectionDetail({ inspection, defectLogs }: Props) {
                 }}
               >
                 <span className="absolute -top-5 left-0 text-xs bg-red-500 text-white px-1 py-0.5 rounded whitespace-nowrap">
-                  {defectTypeKr[log.label] ?? log.label} {(log.confidence * 100).toFixed(0)}%
+                  {getDefectLabel(log.label)} {(log.confidence * 100).toFixed(0)}%
                 </span>
               </div>
             ))}

@@ -36,7 +36,9 @@ export interface Block {
 
 export type InspectionResult = "normal" | "defect";
 export type InspectionStatus = "pending" | "rework_requested" | "completed";
-export type DefectType = "crack" | "porosity" | "undercut" | "overlap" | "spatter" | "기타";
+export type DefectType = string; // 검사 종류별 불량 코드 (lib/inspectionMeta.ts 참고)
+export type InspectionCategory = "welding" | "surface" | "assembly";
+export type Severity = "주의" | "재검사" | "불합격";
 
 export interface Inspection {
   id: string;
@@ -48,6 +50,9 @@ export interface Inspection {
   defect_type: DefectType | null;
   confidence: number;
   status: InspectionStatus;
+  inspection_category: InspectionCategory;
+  severity: Severity | null;
+  recommended_action: string | null;
   memo: string | null;
   created_at: string;
   ship?: Ship;   // 조인 시 사용
@@ -71,6 +76,8 @@ export interface AIInspectionResult {
   confidence: number;
   defect_type: DefectType | null;
   defect_boxes: DefectBox[];
+  severity: Severity | null;
+  recommended_action: string;
 }
 
 export interface DefectBox {

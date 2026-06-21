@@ -7,10 +7,12 @@ const AI_API_URL = process.env.NEXT_PUBLIC_AI_API_URL || "http://localhost:8000"
 
 /**
  * 이미지를 FastAPI 서버로 전송하고 AI 분석 결과를 받습니다.
+ * @param category "welding" | "surface" | "assembly"
  */
-export async function inspectImage(file: File): Promise<AIInspectionResult> {
+export async function inspectImage(file: File, category: string = "welding"): Promise<AIInspectionResult> {
   const formData = new FormData();
   formData.append("image", file);
+  formData.append("category", category);
 
   const response = await fetch(`${AI_API_URL}/inspect`, {
     method: "POST",
