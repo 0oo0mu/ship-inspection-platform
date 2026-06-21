@@ -2,13 +2,13 @@
 // components/inspections/InspectionForm.tsx
 // 검사 요청 폼 - 선박/블록 선택 → 이미지 업로드 → AI 분석(검사종류 자동판별) → 결과 저장
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { inspectImage } from "@/lib/api";
 import { Ship, Block, AIInspectionResult, Severity } from "@/lib/types";
 import {
-  categoryLabel, severityColor, getDefectLabel,
+  categoryLabel, categoryShortLabel, severityColor, getDefectLabel,
 } from "@/lib/inspectionMeta";
 import {
   Upload, X, Loader2, CheckCircle, AlertTriangle,
@@ -23,6 +23,19 @@ interface Props {
 
 // 단계 정의
 type Step = "form" | "analyzing" | "result";
+
+const SAMPLES_PER_CATEGORY = 3;
+const SAMPLE_CATEGORIES = ["welding", "surface", "assembly"] as const;
+
+// 배열에서 n개를 무작위로 뽑기
+function pickRandom<T>(arr: T[], n: number): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, n);
+}
 
 export default function InspectionForm({ ships, blocks, userId }: Props) {
   const router   = useRouter();
@@ -39,9 +52,31 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
   const [aiResult, setAiResult]   = useState<AIInspectionResult | null>(null);
   const [savedId, setSavedId]     = useState<string>("");
   const [error, setError]         = useState("");
+  const [sampleImages, setSampleImages] = useState<{ path: string; label: string }[]>([]);
 
   // 선택된 선박에 속한 블록만 필터링
   const filteredBlocks = blocks.filter((b) => b.ship_id === selectedShip);
+
+  // ── 테스트용 샘플 이미지 목록 불러오기 (public/samples/{welding,surface,assembly}) ──
+  useEffect(() => {
+    fetch("/api/samples")
+      .then((res) => res.json())
+      .then((data: Record<string, string[]>) => {
+        const picked: { path: string; label: string }[] = [];
+        for (const cat of SAMPLE_CATEGORIES) {
+          const files = data[cat] ?? [];
+          const chosen = pickRandom(files, SAMPLES_PER_CATEGORY);
+          chosen.forEach((f) => {
+            picked.push({
+              path: `/samples/${cat}/${f}`,
+              label: categoryShortLabel[cat],
+            });
+          });
+        }
+        setSampleImages(picked);
+      })
+      .catch(() => setSampleImages([]));
+  }, []);
 
   // ── 이미지 선택 처리 ──────────────────────────────
   function handleFile(file: File) {
@@ -64,6 +99,19 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   }, []);
+
+  // ── 샘플 이미지 클릭 시 자동으로 업로드 처리 (테스트용) ──
+  async function handleSampleClick(path: string) {
+    try {
+      const res = await fetch(path);
+      const blob = await res.blob();
+      const fileName = path.split("/").pop() || "sample.jpg";
+      const file = new File([blob], fileName, { type: blob.type || "image/jpeg" });
+      handleFile(file);
+    } catch {
+      setError("샘플 이미지를 불러오지 못했습니다.");
+    }
+  }
 
   // ── AI 검사 실행 ──────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
@@ -349,6 +397,37 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
           className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
+
+        {/* 샘플 이미지로 빠른 테스트 (개발/테스트용) */}
+        {sampleImages.length > 0 && (
+          <div className="pt-2 border-t border-slate-100">
+            <p className="text-xs text-slate-400 mb-2">테스트용 샘플 이미지 (클릭하면 바로 업로드됩니다)</p>
+            <div className="flex gap-2 flex-wrap">
+              {sampleImages.map((s) => (
+                <button
+                  key={s.path}
+                  type="button"
+                  onClick={() => handleSampleClick(s.path)}
+                  className="group relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors"
+                  title={s.label}
+                >
+                  <img
+                    src={s.path}
+                    alt={s.label}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // 샘플 파일이 없으면 버튼 자체를 숨김
+                      (e.currentTarget.closest("button") as HTMLElement)?.style.setProperty("display", "none");
+                    }}
+                  />
+                  <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] text-center py-0.5 truncate px-0.5">
+                    {s.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 메모 */}
