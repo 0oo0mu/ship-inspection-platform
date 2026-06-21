@@ -39,13 +39,18 @@ def _calc_severity_and_action(confidence: float) -> tuple[str, str]:
         return "주의", "경미한 의심 소견입니다. 작업 진행 가능하나 추후 모니터링하세요."
 
 
-def dummy_inspect(image: Image.Image, category: str = "welding") -> InspectionResponse:
+def dummy_inspect(image: Image.Image) -> InspectionResponse:
     """
     더미 AI 추론 함수
     - 실제 모델이 없어도 전체 시스템 흐름을 테스트할 수 있습니다.
     - DUMMY_MODE=true 일 때 사용됩니다.
-    - category: "welding" | "surface" | "assembly"
+    - 실제 서비스에서는 이미지만 보고 검사종류(용접/표면/조립)까지 AI가 자동 판별합니다.
+      더미 모드에서는 이 판별 과정을 랜덤으로 흉내냅니다.
     """
+    # ── 1단계: 검사종류 자동 판별 (실제 모델에서는 별도의 분류기가 수행) ──
+    category = random.choice(list(DEFECT_TYPES_BY_CATEGORY.keys()))
+    category_confidence = round(random.uniform(0.85, 0.99), 3)
+
     defect_types = DEFECT_TYPES_BY_CATEGORY.get(category, DEFECT_TYPES_BY_CATEGORY["welding"])
 
     # 70% 확률로 불량 판정 (테스트 목적)
@@ -73,6 +78,8 @@ def dummy_inspect(image: Image.Image, category: str = "welding") -> InspectionRe
         return InspectionResponse(
             result="defect",
             confidence=confidence,
+            inspection_category=category,
+            category_confidence=category_confidence,
             defect_type=defect_type,
             defect_boxes=boxes,
             severity=severity,
@@ -84,6 +91,8 @@ def dummy_inspect(image: Image.Image, category: str = "welding") -> InspectionRe
         return InspectionResponse(
             result="normal",
             confidence=confidence,
+            inspection_category=category,
+            category_confidence=category_confidence,
             defect_type=None,
             defect_boxes=[],
             severity=None,

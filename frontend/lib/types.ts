@@ -74,6 +74,8 @@ export interface DefectLog {
 export interface AIInspectionResult {
   result: InspectionResult;
   confidence: number;
+  inspection_category: InspectionCategory; // AI가 자동 판별한 검사종류
+  category_confidence: number;
   defect_type: DefectType | null;
   defect_boxes: DefectBox[];
   severity: Severity | null;

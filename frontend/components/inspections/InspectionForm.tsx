@@ -1,21 +1,18 @@
 "use client";
 // components/inspections/InspectionForm.tsx
-// 검사 요청 폼 - 선박/블록 선택 → 이미지 업로드 → AI 분석 → 결과 저장
+// 검사 요청 폼 - 선박/블록 선택 → 이미지 업로드 → AI 분석(검사종류 자동판별) → 결과 저장
 
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase";
 import { inspectImage } from "@/lib/api";
-import { Ship, Block, AIInspectionResult } from "@/lib/types";
+import { Ship, Block, AIInspectionResult, Severity } from "@/lib/types";
 import {
-  CATEGORY_LIST, categoryLabel, categoryShortLabel, categoryDescription,
-  severityColor, getDefectLabel,
-  InspectionCategory, Severity,
+  categoryLabel, severityColor, getDefectLabel,
 } from "@/lib/inspectionMeta";
 import {
   Upload, X, Loader2, CheckCircle, AlertTriangle,
-  ChevronDown, ImageIcon, Wrench, Layers, Package
+  ChevronDown, ImageIcon, Sparkles
 } from "lucide-react";
 
 interface Props {
@@ -27,19 +24,12 @@ interface Props {
 // 단계 정의
 type Step = "form" | "analyzing" | "result";
 
-const categoryIcon: Record<InspectionCategory, any> = {
-  welding: Wrench,
-  surface: Layers,
-  assembly: Package,
-};
-
 export default function InspectionForm({ ships, blocks, userId }: Props) {
   const router   = useRouter();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep]           = useState<Step>("form");
-  const [category, setCategory]   = useState<InspectionCategory>("welding");
   const [selectedShip, setSelectedShip] = useState("");
   const [selectedBlock, setSelectedBlock] = useState("");
   const [memo, setMemo]           = useState("");
@@ -86,8 +76,8 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
     setStep("analyzing");
 
     try {
-      // 1. FastAPI AI 서버에 이미지 전송 (검사 종류 함께 전달)
-      const result = await inspectImage(imageFile, category);
+      // 1. FastAPI AI 서버에 이미지 전송 (검사종류는 AI가 사진을 보고 자동 판별)
+      const result = await inspectImage(imageFile);
       setAiResult(result);
 
       // 2. Supabase Storage에 이미지 업로드
@@ -106,7 +96,7 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
         .from("inspections")
         .getPublicUrl(filePath);
 
-      // 4. 검사 결과 DB 저장
+      // 4. 검사 결과 DB 저장 (AI가 판별한 검사종류를 그대로 저장)
       const { data: inspection, error: dbError } = await supabase
         .from("inspections")
         .insert({
@@ -118,7 +108,7 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
           defect_type:         result.defect_type,
           confidence:          result.confidence,
           status:              "pending",
-          inspection_category: category,
+          inspection_category: result.inspection_category,
           severity:            result.severity,
           recommended_action:  result.recommended_action,
           memo:                memo || null,
@@ -162,6 +152,13 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
         <div className={`rounded-2xl border-2 p-6 ${
           isDefect ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"
         }`}>
+          {/* AI 자동 판별 배지 */}
+          <div className="flex items-center gap-1.5 mb-3 text-xs text-slate-500">
+            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+            AI 자동 판별: <strong className="text-slate-700">{categoryLabel[aiResult.inspection_category]}</strong>
+            <span className="text-slate-400">({(aiResult.category_confidence * 100).toFixed(0)}%)</span>
+          </div>
+
           <div className="flex items-center gap-4 mb-4">
             {isDefect
               ? <AlertTriangle className="w-10 h-10 text-red-500" />
@@ -179,8 +176,6 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
                 )}
               </div>
               <p className="text-sm text-slate-500 mt-0.5">
-                검사 종류: <strong>{categoryShortLabel[category]}</strong>
-                <span className="mx-2">·</span>
                 신뢰도: <strong>{(aiResult.confidence * 100).toFixed(1)}%</strong>
                 {isDefect && aiResult.defect_type && (
                   <span className="ml-2">
@@ -251,7 +246,7 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
         <p className="text-lg font-semibold text-slate-700">AI 분석 중...</p>
-        <p className="text-sm text-slate-400">이미지를 분석하고 있습니다. 잠시만 기다려 주세요.</p>
+        <p className="text-sm text-slate-400">검사종류 판별 및 불량 여부를 분석하고 있습니다. 잠시만 기다려 주세요.</p>
         <div className="w-48 bg-slate-200 rounded-full h-1.5 overflow-hidden">
           <div className="h-full bg-blue-600 rounded-full animate-pulse w-3/4" />
         </div>
@@ -270,40 +265,9 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
         </div>
       )}
 
-      {/* 검사 종류 선택 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
-        <h3 className="font-semibold text-slate-800 text-sm">① 검사 종류 선택</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {CATEGORY_LIST.map((cat) => {
-            const Icon = categoryIcon[cat];
-            const active = category === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategory(cat)}
-                className={`text-left p-3.5 rounded-xl border-2 transition-colors ${
-                  active
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon className={`w-4 h-4 ${active ? "text-blue-600" : "text-slate-400"}`} />
-                  <span className={`text-sm font-semibold ${active ? "text-blue-700" : "text-slate-700"}`}>
-                    {categoryLabel[cat]}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">{categoryDescription[cat]}</p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* 선박 선택 */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
-        <h3 className="font-semibold text-slate-800 text-sm">② 검사 대상 선택</h3>
+        <h3 className="font-semibold text-slate-800 text-sm">① 검사 대상 선택</h3>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -345,7 +309,10 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
 
       {/* 이미지 업로드 */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
-        <h3 className="font-semibold text-slate-800 text-sm">③ 검사 이미지 업로드</h3>
+        <h3 className="font-semibold text-slate-800 text-sm">② 검사 이미지 업로드</h3>
+        <p className="text-xs text-slate-400 -mt-2">
+          검사종류(용접/표면/조립)는 사진을 보고 AI가 자동으로 판별합니다. 따로 선택할 필요 없습니다.
+        </p>
 
         {imagePreview ? (
           <div className="relative">
@@ -386,7 +353,7 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
 
       {/* 메모 */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-2">
-        <h3 className="font-semibold text-slate-800 text-sm">④ 메모 (선택)</h3>
+        <h3 className="font-semibold text-slate-800 text-sm">③ 메모 (선택)</h3>
         <textarea
           value={memo}
           onChange={(e) => setMemo(e.target.value)}
