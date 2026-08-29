@@ -93,22 +93,31 @@ export default function InspectionDetail({ inspection, defectLogs }: Props) {
               className="w-full object-contain max-h-96"
             />
             {/* 불량 위치 박스 오버레이 */}
-            {defectLogs.map((log, i) => (
-              <div
-                key={i}
-                className="absolute border-2 border-red-500 bg-red-500/10"
-                style={{
-                  left:   `${(log.bbox_x - log.bbox_width  / 2) * 100}%`,
-                  top:    `${(log.bbox_y - log.bbox_height / 2) * 100}%`,
-                  width:  `${log.bbox_width  * 100}%`,
-                  height: `${log.bbox_height * 100}%`,
-                }}
-              >
-                <span className="absolute -top-5 left-0 text-xs bg-red-500 text-white px-1 py-0.5 rounded whitespace-nowrap">
-                  {getDefectLabel(log.label)} {(log.confidence * 100).toFixed(0)}%
-                </span>
-              </div>
-            ))}
+            {defectLogs.map((log, i) => {
+              // 박스가 이미지 가장자리에 걸리면 라벨이 프레임 밖으로 잘리므로 위치를 안쪽으로 보정
+              const nearTop   = log.bbox_y - log.bbox_height / 2 < 0.07;
+              const nearRight = log.bbox_x + log.bbox_width  / 2 > 0.80;
+              return (
+                <div
+                  key={i}
+                  className="absolute border-2 border-red-500 bg-red-500/10"
+                  style={{
+                    left:   `${(log.bbox_x - log.bbox_width  / 2) * 100}%`,
+                    top:    `${(log.bbox_y - log.bbox_height / 2) * 100}%`,
+                    width:  `${log.bbox_width  * 100}%`,
+                    height: `${log.bbox_height * 100}%`,
+                  }}
+                >
+                  <span
+                    className={`absolute text-xs bg-red-500 text-white px-1 py-0.5 rounded whitespace-nowrap ${
+                      nearTop ? "top-0" : "-top-5"
+                    } ${nearRight ? "right-0" : "left-0"}`}
+                  >
+                    {getDefectLabel(log.label)} {(log.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -37,7 +37,7 @@ export interface Block {
 export type InspectionResult = "normal" | "defect";
 export type InspectionStatus = "pending" | "rework_requested" | "completed";
 export type DefectType = string; // 검사 종류별 불량 코드 (lib/inspectionMeta.ts 참고)
-export type InspectionCategory = "welding" | "surface" | "assembly";
+export type InspectionCategory = "welding" | "machining" | "installation" | "assembly";
 export type Severity = "주의" | "재검사" | "불합격";
 
 export interface Inspection {

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase";
 import { inspectImage } from "@/lib/api";
 import { Ship, Block, AIInspectionResult, Severity } from "@/lib/types";
 import {
-  categoryLabel, categoryShortLabel, severityColor, getDefectLabel,
+  categoryLabel, severityColor, getDefectLabel,
 } from "@/lib/inspectionMeta";
 import {
   Upload, X, Loader2, CheckCircle, AlertTriangle,
@@ -24,8 +24,7 @@ interface Props {
 // 단계 정의
 type Step = "form" | "analyzing" | "result";
 
-const SAMPLES_PER_CATEGORY = 3;
-const SAMPLE_CATEGORIES = ["welding", "surface", "assembly"] as const;
+const SAMPLE_COUNT = 12; // 표시할 샘플 썸네일 수 (public/samples 안 아무 이미지나)
 
 // 배열에서 n개를 무작위로 뽑기
 function pickRandom<T>(arr: T[], n: number): T[] {
@@ -57,22 +56,18 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
   // 선택된 선박에 속한 블록만 필터링
   const filteredBlocks = blocks.filter((b) => b.ship_id === selectedShip);
 
-  // ── 테스트용 샘플 이미지 목록 불러오기 (public/samples/{welding,surface,assembly}) ──
+  // ── 테스트용 샘플 이미지 목록 불러오기 (public/samples/ 안 아무 이미지나) ──
   useEffect(() => {
     fetch("/api/samples")
       .then((res) => res.json())
-      .then((data: Record<string, string[]>) => {
-        const picked: { path: string; label: string }[] = [];
-        for (const cat of SAMPLE_CATEGORIES) {
-          const files = data[cat] ?? [];
-          const chosen = pickRandom(files, SAMPLES_PER_CATEGORY);
-          chosen.forEach((f) => {
-            picked.push({
-              path: `/samples/${cat}/${f}`,
-              label: categoryShortLabel[cat],
-            });
-          });
-        }
+      .then((data: { files?: string[] }) => {
+        const files = data.files ?? [];
+        const picked = pickRandom(files, SAMPLE_COUNT).map((f) => {
+          // 폴더 경로를 그대로 라벨로 사용: "배관/기공/x.jpg" → "배관 - 기공"
+          const dirs = f.split("/").slice(0, -1);
+          const label = dirs.length ? dirs.join(" - ") : "샘플";
+          return { path: `/samples/${f}`, label };
+        });
         setSampleImages(picked);
       })
       .catch(() => setSampleImages([]));
@@ -246,22 +241,31 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
             <div className="relative rounded-xl overflow-hidden bg-slate-100 aspect-video">
               <img src={imagePreview} alt="검사 이미지" className="w-full h-full object-contain" />
               {/* 불량 위치 박스 오버레이 */}
-              {aiResult.defect_boxes.map((box, i) => (
-                <div
-                  key={i}
-                  className="absolute border-2 border-red-500 bg-red-500/10"
-                  style={{
-                    left:   `${(box.x - box.width  / 2) * 100}%`,
-                    top:    `${(box.y - box.height / 2) * 100}%`,
-                    width:  `${box.width  * 100}%`,
-                    height: `${box.height * 100}%`,
-                  }}
-                >
-                  <span className="absolute -top-5 left-0 text-xs bg-red-500 text-white px-1 py-0.5 rounded whitespace-nowrap">
-                    {getDefectLabel(box.label)} {(box.confidence * 100).toFixed(0)}%
-                  </span>
-                </div>
-              ))}
+              {aiResult.defect_boxes.map((box, i) => {
+                // 박스가 이미지 가장자리에 걸리면 라벨이 프레임 밖으로 잘리므로 위치를 안쪽으로 보정
+                const nearTop   = box.y - box.height / 2 < 0.07;   // 위쪽 가장자리 → 라벨을 박스 안쪽 상단에
+                const nearRight = box.x + box.width  / 2 > 0.80;   // 오른쪽 가장자리 → 라벨을 오른쪽 정렬(왼쪽으로 뻗게)
+                return (
+                  <div
+                    key={i}
+                    className="absolute border-2 border-red-500 bg-red-500/10"
+                    style={{
+                      left:   `${(box.x - box.width  / 2) * 100}%`,
+                      top:    `${(box.y - box.height / 2) * 100}%`,
+                      width:  `${box.width  * 100}%`,
+                      height: `${box.height * 100}%`,
+                    }}
+                  >
+                    <span
+                      className={`absolute text-xs bg-red-500 text-white px-1 py-0.5 rounded whitespace-nowrap ${
+                        nearTop ? "top-0" : "-top-5"
+                      } ${nearRight ? "right-0" : "left-0"}`}
+                    >
+                      {getDefectLabel(box.label)} {(box.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
