@@ -129,6 +129,28 @@ export default function StatsDashboard({ inspections, ships }: Props) {
     .sort((a, b) => b.defect - a.defect)
     .slice(0, 8);
 
+  // ── 5) 공정별(용접/가공/설치/조립) 검사 현황 ──
+  const catMap: Record<string, { name: string; total: number; defect: number }> = {};
+  CATEGORY_LIST.forEach((c) => {
+    catMap[c] = { name: categoryShortLabel[c], total: 0, defect: 0 };
+  });
+  periodFiltered.forEach((ins) => {
+    const c = ins.inspection_category;
+    if (c && catMap[c]) {
+      catMap[c].total++;
+      if (ins.result === "defect") catMap[c].defect++;
+    }
+  });
+  const categoryData = CATEGORY_LIST.map((c) => {
+    const m = catMap[c];
+    return {
+      name: m.name,
+      total: m.total,
+      defect: m.defect,
+      rate: m.total ? Math.round((m.defect / m.total) * 1000) / 10 : 0,
+    };
+  });
+
   return (
     <div className="space-y-6">
 
@@ -299,6 +321,41 @@ export default function StatsDashboard({ inspections, ships }: Props) {
                 <Bar dataKey="defect" name="불량" fill="#f87171" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* 5. 공정별 검사 현황 (전체 폭) */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 lg:col-span-2">
+          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-slate-400" />
+            공정별 검사 현황 <span className="text-xs font-normal text-slate-400">(용접·가공·설치·조립 · AI 자동 분류)</span>
+          </h3>
+          {total === 0 ? (
+            <p className="text-center text-slate-400 py-12 text-sm">데이터 없음</p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={categoryData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                  <Tooltip formatter={(v: any, n: any) => [`${v}건`, n]} />
+                  <Legend />
+                  <Bar dataKey="total"  name="전체 검사" fill="#93c5fd" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="defect" name="불량"      fill="#f87171" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              {/* 공정별 불량률 요약 */}
+              <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-slate-100">
+                {categoryData.map((c) => (
+                  <div key={c.name} className="text-center">
+                    <p className="text-xs text-slate-500">{c.name}</p>
+                    <p className="text-base font-bold text-slate-800">{c.rate}%</p>
+                    <p className="text-[10px] text-slate-400">불량 {c.defect}/{c.total}건</p>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 

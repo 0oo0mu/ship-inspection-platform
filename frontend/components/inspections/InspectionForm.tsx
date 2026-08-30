@@ -5,7 +5,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
-import { inspectImage } from "@/lib/api";
+import { inspectImage, warmUpAI } from "@/lib/api";
 import { Ship, Block, AIInspectionResult, Severity } from "@/lib/types";
 import {
   categoryLabel, severityColor, getDefectLabel,
@@ -51,7 +51,13 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
   const [aiResult, setAiResult]   = useState<AIInspectionResult | null>(null);
   const [savedId, setSavedId]     = useState<string>("");
   const [error, setError]         = useState("");
+  const [warming, setWarming]     = useState(false); // 콜드스타트(서버 예열) 안내 표시
   const [sampleImages, setSampleImages] = useState<{ path: string; label: string }[]>([]);
+
+  // ── 검사 화면 진입 시 AI 서버 미리 예열 (Render 콜드스타트 대비) ──
+  useEffect(() => {
+    warmUpAI();
+  }, []);
 
   // 선택된 선박에 속한 블록만 필터링
   const filteredBlocks = blocks.filter((b) => b.ship_id === selectedShip);
@@ -117,10 +123,15 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
 
     setError("");
     setStep("analyzing");
+    // 서버가 잠들어 있었으면 응답이 늦어질 수 있음 → 6초 지나면 예열 안내 표시
+    setWarming(false);
+    const warmTimer = setTimeout(() => setWarming(true), 6000);
 
     try {
       // 1. FastAPI AI 서버에 이미지 전송 (검사종류는 AI가 사진을 보고 자동 판별)
       const result = await inspectImage(imageFile);
+      clearTimeout(warmTimer);
+      setWarming(false);
       setAiResult(result);
 
       // 2. Supabase Storage에 이미지 업로드
@@ -180,6 +191,8 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
       setStep("result");
 
     } catch (err: any) {
+      clearTimeout(warmTimer);
+      setWarming(false);
       setError(err.message || "오류가 발생했습니다.");
       setStep("form");
     }
@@ -302,6 +315,11 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
         <div className="w-48 bg-slate-200 rounded-full h-1.5 overflow-hidden">
           <div className="h-full bg-blue-600 rounded-full animate-pulse w-3/4" />
         </div>
+        {warming && (
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-sm text-center">
+            서버가 절전 상태였다면 처음 깨어나는 데 최대 1분 정도 걸릴 수 있어요. 그대로 기다려 주세요 🔥
+          </p>
+        )}
       </div>
     );
   }
@@ -363,7 +381,7 @@ export default function InspectionForm({ ships, blocks, userId }: Props) {
       <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
         <h3 className="font-semibold text-slate-800 text-sm">② 검사 이미지 업로드</h3>
         <p className="text-xs text-slate-400 -mt-2">
-          검사종류(용접/표면/조립)는 사진을 보고 AI가 자동으로 판별합니다. 따로 선택할 필요 없습니다.
+          검사종류(용접/가공/설치/조립)는 사진을 보고 AI가 자동으로 판별합니다. 따로 선택할 필요 없습니다.
         </p>
 
         {imagePreview ? (
